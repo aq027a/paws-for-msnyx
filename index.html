@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paws for MsNyx</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;1,9..144,600;1,9..144,700&family=Nunito:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: one-screen app — header with name, language switch and filters; card stack centred; actions below; favourites in a slide-up sheet.
+   Deliberately single dark theme: night purple ground, deep green as the second voice. */
+:root {
+  --bg: #120a1a;
+  --bg-glow: #2a1240;
+  --surface: #1e1229;
+  --surface-2: #2a1a38;
+  --ink: #f1e9f7;
+  --muted: #a493b5;
+  --line: #3a2650;
+  --purple: #6b2fa0;
+  --purple-hi: #b07de0;
+  --green: #1d5a43;
+  --green-hi: #5fc79a;
+  --gold: #d8b65e;
+  --shadow: 0 22px 44px -18px rgba(0, 0, 0, .85);
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background:
+    radial-gradient(120% 60% at 50% -10%, var(--bg-glow), transparent 70%),
+    radial-gradient(80% 50% at 100% 110%, rgba(29, 90, 67, .35), transparent 70%),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--purple-hi); outline-offset: 3px; }
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 14px;
+  max-width: 460px;
+  margin: 0 auto;
+  padding-block: max(14px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Header */
+header { display: grid; gap: 12px; }
+.brand { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.name { display: grid; gap: 1px; min-width: 0; }
+.logo {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -.01em;
+  margin: 0;
+  display: flex; align-items: center; gap: 8px;
+}
+.logo .moon { color: var(--purple-hi); display: inline-flex; }
+.logo b { font-weight: 700; color: var(--green-hi); }
+.sub { margin: 0; font-size: 13px; color: var(--muted); }
+.top-right { display: flex; align-items: center; gap: 8px; }
+.lang {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px;
+  background: var(--surface);
+}
+.lang button {
+  border: 0; background: transparent;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px; font-weight: 800; letter-spacing: .06em;
+  color: var(--muted);
+}
+.lang button[aria-pressed="true"] { background: var(--green); color: var(--ink); }
+.fav-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 7px 14px 7px 10px;
+  font-weight: 800;
+}
+.fav-btn svg { color: var(--purple-hi); }
+.fav-btn .count { font-variant-numeric: tabular-nums; min-width: 1ch; }
+.fav-btn.bump { animation: bump .4s ease; }
+@keyframes bump { 40% { transform: scale(1.15); } }
+
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--line);
+  background: transparent;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--muted);
+}
+.chip[aria-pressed="true"] { background: var(--purple); color: var(--ink); border-color: var(--purple); }
+
+/* Deck */
+.deck { position: relative; min-height: 0; }
+.card {
+  position: absolute; inset: 0;
+  border-radius: 26px;
+  overflow: hidden;
+  background: #000;
+  box-shadow: var(--shadow);
+  outline: 1px solid rgba(176, 125, 224, .18);
+  touch-action: none;
+  user-select: none;
+  will-change: transform;
+  transition: transform .3s cubic-bezier(.2,.8,.3,1.2);
+}
+.card.dragging { transition: none; cursor: grabbing; }
+.card.leaving { transition: transform .45s ease-in, opacity .45s ease-in; }
+.card video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  background: #0b0610;
+}
+.meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.score { font-size: 12px; font-weight: 800; color: var(--purple-hi); font-variant-numeric: tabular-nums; }
+.card .shade {
+  position: absolute; inset: auto 0 0 0; height: 58%;
+  background: linear-gradient(to top, rgba(18,10,26,.95), rgba(18,10,26,0));
+  pointer-events: none;
+}
+.card .info {
+  position: absolute; left: 18px; right: 18px; bottom: 16px;
+  color: #fff;
+  display: grid; gap: 6px;
+  pointer-events: none;
+}
+.tag {
+  justify-self: start;
+  font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px;
+  color: var(--ink);
+}
+.tag.dog { background: rgba(29, 90, 67, .85); }
+.tag.cat { background: rgba(107, 47, 160, .85); }
+.tag.intro { background: rgba(176, 125, 224, .9); color: #1a0f24; }
+.card.intro img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: 60% 30%;
+  pointer-events: none; -webkit-user-drag: none;
+}
+.card.intro .shade { height: 70%; }
+.card.intro h2 { font-size: 30px; font-style: italic; }
+.card.intro h2 b { color: var(--green-hi); font-weight: 600; }
+.intro-text { margin: 0; font-size: 15px; line-height: 1.45; color: rgba(255,255,255,.9); max-width: 34ch; }
+.intro-go { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--purple-hi); }
+.card h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.credit { font-size: 12px; opacity: .75; pointer-events: auto; }
+.credit a { color: inherit; }
+
+.stamp {
+  position: absolute; top: 34px;
+  font-family: var(--font-body);
+  font-weight: 800; font-size: 32px; letter-spacing: .06em;
+  padding: 2px 14px;
+  border: 4px solid currentColor;
+  border-radius: 12px;
+  opacity: 0;
+  pointer-events: none;
+  background: rgba(18,10,26,.35);
+}
+.stamp.love { left: 22px; color: var(--purple-hi); transform: rotate(-14deg); }
+.stamp.nope { right: 22px; color: var(--green-hi); transform: rotate(14deg); }
+
+.paused-hint {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 72px; height: 72px; border-radius: 50%;
+  background: rgba(18,10,26,.55);
+  display: grid; place-items: center;
+  color: #fff;
+  pointer-events: none;
+}
+.sound {
+  position: absolute; top: 14px; right: 14px;
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 0;
+  background: rgba(18,10,26,.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  display: grid; place-items: center;
+  z-index: 5;
+}
+.loading {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  color: rgba(255,255,255,.6);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* Empty state */
+.empty {
+  position: absolute; inset: 0;
+  border: 2px dashed var(--line);
+  border-radius: 26px;
+  display: grid; place-content: center; justify-items: center; gap: 10px;
+  text-align: center;
+  padding: 24px;
+}
+.empty .big { font-family: var(--font-display); font-style: italic; font-size: 28px; font-weight: 600; margin: 0; }
+.empty p { margin: 0; color: var(--muted); max-width: 30ch; }
+.primary {
+  border: 0; border-radius: 999px;
+  background: var(--purple); color: var(--ink);
+  padding: 11px 20px; font-weight: 800;
+}
+
+/* Actions */
+.actions { display: flex; justify-content: center; align-items: center; gap: 22px; }
+.act {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  box-shadow: 0 10px 22px -12px rgba(0,0,0,.9);
+  transition: transform .15s ease, background .15s ease;
+}
+.act:active { transform: scale(.9); }
+.act.nope { width: 64px; height: 64px; color: var(--green-hi); }
+.act.nope:hover { background: var(--green); color: var(--ink); }
+.act.love { width: 64px; height: 64px; color: var(--purple-hi); }
+.act.love:hover { background: var(--purple); color: var(--ink); }
+.act.undo { width: 46px; height: 46px; color: var(--gold); }
+.act:disabled { opacity: .35; cursor: default; }
+.act:disabled:hover { background: var(--surface); }
+.hint { text-align: center; color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+
+/* Favourites sheet */
+.sheet-bg { position: fixed; inset: 0; background: rgba(5,2,8,.6); z-index: 20; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  max-height: 82%;
+  max-width: 560px; margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--line); border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  z-index: 21;
+  display: grid; grid-template-rows: auto 1fr;
+  padding-block: 16px max(16px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  animation: up .3s ease;
+}
+@keyframes up { from { transform: translateY(100%); } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.sheet-head h3 { margin: 0; font-family: var(--font-display); font-style: italic; font-size: 24px; font-weight: 600; }
+.close { border: 0; background: transparent; padding: 6px; color: var(--muted); }
+.grid { overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-content: start; }
+.fav {
+  position: relative;
+  border-radius: 16px; overflow: hidden;
+  background: #000;
+  aspect-ratio: 3 / 4;
+  max-width: 100%;
+}
+.fav video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fav span {
+  position: absolute; left: 8px; right: 8px; bottom: 8px;
+  color: #fff; font-weight: 700; font-size: 13px; line-height: 1.2;
+  text-shadow: 0 1px 4px rgba(0,0,0,.8);
+  pointer-events: none;
+}
+.fav .rm {
+  position: absolute; top: 6px; right: 6px;
+  width: 28px; height: 28px; border-radius: 50%; border: 0;
+  background: rgba(18,10,26,.6); color: #fff;
+  display: grid; place-items: center;
+}
+.sheet .none { color: var(--muted); grid-column: 1 / -1; margin: 10px 0 20px; }
+
+@media (max-width: 380px) {
+  .logo { font-size: 26px; }
+  .sub { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, .card.leaving { transition-duration: .01s; }
+  .sheet, .fav-btn.bump { animation: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="name">
+        <h1 class="logo">
+          <span class="moon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1z"/></svg>
+          </span>
+          <span>Ms<b>Nyx</b></span>
+        </h1>
+        <p class="sub" data-i18n="subtitle">Reddit's cutest dogs &amp; cats of all time</p>
+      </div>
+      <div class="top-right">
+        <div class="lang" role="group" aria-label="Language">
+          <button id="lang-en" data-lang="en" aria-pressed="true">EN</button>
+          <button id="lang-ro" data-lang="ro" aria-pressed="false">RO</button>
+        </div>
+        <button class="fav-btn" id="favBtn" data-i18n-aria="showFavs" aria-label="Show favorites">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.8 4.5c2.1 0 3.6 1.1 5.2 3 1.6-1.9 3.1-3 5.2-3 3.8 0 5.9 3.8 4.4 7.2C19.5 16.4 12 21 12 21z"/></svg>
+          <span class="count" id="favCount">0</span>
+        </button>
+      </div>
+    </div>
+    <div class="chips" role="group" data-i18n-aria="filterGroup" aria-label="Filter animals">
+      <button class="chip" id="f-all" data-filter="all" data-i18n="all" aria-pressed="true">All</button>
+      <button class="chip" id="f-dog" data-filter="dog" data-i18n="dogs" aria-pressed="false">Dogs</button>
+      <button class="chip" id="f-cat" data-filter="cat" data-i18n="cats" aria-pressed="false">Cats</button>
+    </div>
+  </header>
+
+  <main class="deck" id="deck" aria-live="polite"></main>
+
+  <footer>
+    <div class="actions">
+      <button class="act undo" id="undoBtn" data-i18n-aria="undo" aria-label="Back to last video" disabled>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+      </button>
+      <button class="act nope" id="nopeBtn" data-i18n-aria="skip" aria-label="Skip">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <button class="act love" id="loveBtn" data-i18n-aria="love" aria-label="Add to favorites">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.8 4.5c2.1 0 3.6 1.1 5.2 3 1.6-1.9 3.1-3 5.2-3 3.8 0 5.9 3.8 4.4 7.2C19.5 16.4 12 21 12 21z"/></svg>
+      </button>
+    </div>
+    <p class="hint" data-i18n="hint">Swipe or ← → · Tap to pause · M for sound</p>
+  </footer>
+</div>
+
+<div class="sheet-bg" id="sheetBg" hidden></div>
+<section class="sheet" id="sheet" hidden data-i18n-aria="favsTitle" aria-label="Your favorites">
+  <div class="sheet-head">
+    <h3 data-i18n="favsTitle">Your favorites</h3>
+    <button class="close" id="closeSheet" data-i18n-aria="close" aria-label="Close">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <div class="grid" id="favGrid"></div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<script>
+// ---- translations ----
+const T = {
+  en: {
+    subtitle: "Reddit's cutest dogs & cats of all time",
+    all: "All", dogs: "Dogs", cats: "Cats",
+    dog: "Doggo", cat: "Kitty",
+    love: "Add to favorites", skip: "Skip", undo: "Back to last video",
+    stampLove: "AWW", stampNope: "NEXT",
+    loading: "Loading…",
+    hint: "Swipe or ← → · Tap to pause · M for sound",
+    showFavs: "Show favorites", favsTitle: "Your favorites", close: "Close",
+    remove: "Remove from favorites",
+    none: "No favorites yet. Swipe a video to the right and it lands here.",
+    doneTitle: "That's all of them!",
+    doneText: n => n === 1 ? "You saved 1 video to your favorites." : `You saved ${n} videos to your favorites.`,
+    restart: "Start over",
+    soundOn: "Turn sound on", soundOff: "Turn sound off",
+    filterGroup: "Filter animals",
+    onReddit: "View on Reddit",
+    intro: "For you",
+    introText: "I made this page for you, for the days when you feel down. Whenever you need a little smile, the cutest dogs and cats on Reddit are waiting here to cheer you up.",
+    introGo: "Swipe to start →",
+  },
+  ro: {
+    subtitle: "Cei mai drăguți câini și pisici de pe Reddit",
+    all: "Toate", dogs: "Câini", cats: "Pisici",
+    dog: "Câine", cat: "Pisică",
+    love: "Adaugă la preferate", skip: "Treci peste", undo: "Înapoi la ultimul video",
+    stampLove: "AWW", stampNope: "PAS",
+    loading: "Se încarcă…",
+    hint: "Glisează sau ← → · Atinge pentru pauză · M pentru sunet",
+    showFavs: "Arată preferatele", favsTitle: "Preferatele tale", close: "Închide",
+    remove: "Elimină din preferate",
+    none: "Încă nu ai preferate. Glisează un video spre dreapta și apare aici.",
+    doneTitle: "Asta a fost tot!",
+    doneText: n => n === 1 ? "Ai salvat 1 video la preferate." : `Ai salvat ${n} videoclipuri la preferate.`,
+    restart: "Ia-o de la capăt",
+    soundOn: "Pornește sunetul", soundOff: "Oprește sunetul",
+    filterGroup: "Filtrează animalele",
+    onReddit: "Vezi pe Reddit",
+    intro: "Pentru tine",
+    introText: "Am făcut pagina asta pentru tine, pentru zilele în care nu te simți bine. Ori de câte ori ai nevoie de un zâmbet, cei mai drăguți câini și pisici de pe Reddit te așteaptă aici ca să te înveselească.",
+    introGo: "Glisează ca să începi →",
+  },
+};
+
+// Top posts of all time from r/aww, r/rarepuppers, r/puppies, r/IllegallySmolCats and r/Catswhoyell.
+// Videos stream from Reddit's own video host; titles are the original Reddit titles.
+const VIDEOS = [{"id":"30539jfgxsn51","type":"dog","title":"Came for a dog and left with him","sub":"aww","score":160573,"post":"https://www.reddit.com/r/aww/comments/iuvykg/came_for_a_dog_and_left_with_him/"},{"id":"5pw4caru7cp31","type":"dog","title":"Special birthday treat for the best doggo","sub":"rarepuppers","score":105949,"post":"https://www.reddit.com/r/rarepuppers/comments/dag1n5/special_birthday_treat_for_the_best_doggo/"},{"id":"3454x7ez8ri51","type":"dog","title":"abandoned pup spent his youth on the streets, this was his first night home. he’s the bestest boy. ❤️","sub":"rarepuppers","score":96001,"post":"https://www.reddit.com/r/rarepuppers/comments/if3afb/abandoned_pup_spent_his_youth_on_the_streets_this/"},{"id":"slrjb6u2s2b21","type":"dog","title":"Dunkin won't eat his food unless it is microwaved, because he thinks that makes it human food","sub":"rarepuppers","score":92243,"post":"https://www.reddit.com/r/rarepuppers/comments/ah4jq5/dunkin_wont_eat_his_food_unless_it_is_microwaved/"},{"id":"0c2w199homx21","type":"dog","title":"The most good boi","sub":"rarepuppers","score":89135,"post":"https://www.reddit.com/r/rarepuppers/comments/bnfjai/the_most_good_boi/"},{"id":"vgc7h9p38h351","type":"dog","title":"Human pretends to be drowning to see if his doggo would save him","sub":"rarepuppers","score":86867,"post":"https://www.reddit.com/r/rarepuppers/comments/gyayb9/human_pretends_to_be_drowning_to_see_if_his_doggo/"},{"id":"yq1ebqeorev71","type":"dog","title":"He figured out a way to get up onto the big chair.","sub":"rarepuppers","score":84744,"post":"https://www.reddit.com/r/rarepuppers/comments/qet8yf/he_figured_out_a_way_to_get_up_onto_the_big_chair/"},{"id":"od6cg4oqlkn91","type":"dog","title":"My Corgi's 'double take' when I picked her up from the groomer 🥹","sub":"rarepuppers","score":76969,"post":"https://www.reddit.com/r/rarepuppers/comments/xd03po/my_corgis_double_take_when_i_picked_her_up_from/"},{"id":"wavgkdun56j71","type":"dog","title":"My sister has COVID so is isolating, but she is my dog’s favourite. He’s waiting outside her room because he misses her.","sub":"rarepuppers","score":73866,"post":"https://www.reddit.com/r/rarepuppers/comments/pa8do5/my_sister_has_covid_so_is_isolating_but_she_is_my/"},{"id":"0uu3mk5euqu31","type":"dog","title":"Shepherd dog doesn't give up.","sub":"rarepuppers","score":69192,"post":"https://www.reddit.com/r/rarepuppers/comments/dn2z6d/shepherd_dog_doesnt_give_up/"},{"id":"xx2ex0b0dyc91","type":"dog","title":"This is Zouk, he's a mini dachshund, 16 weeks. He likes to sneak to my bed from his. I faked sleep to capture it","sub":"rarepuppers","score":65519,"post":"https://www.reddit.com/r/rarepuppers/comments/w4ls9h/this_is_zouk_hes_a_mini_dachshund_16_weeks_he/"},{"id":"npv93hy89rj71","type":"dog","title":"She adopted them without question","sub":"rarepuppers","score":62968,"post":"https://www.reddit.com/r/rarepuppers/comments/pc6tq3/she_adopted_them_without_question/"},{"id":"ndjzo2ycsak71","type":"dog","title":"The pack goes shopping","sub":"rarepuppers","score":62802,"post":"https://www.reddit.com/r/rarepuppers/comments/pdv37w/the_pack_goes_shopping/"},{"id":"9tl9l8f836071","type":"dog","title":"Sweetest old girl we met at the dog park","sub":"rarepuppers","score":62075,"post":"https://www.reddit.com/r/rarepuppers/comments/ngle57/sweetest_old_girl_we_met_at_the_dog_park/"},{"id":"rcg5jja9js281","type":"dog","title":"Benjamin would appreciate it if you could all acknowledge how awesome his toy is.","sub":"rarepuppers","score":61451,"post":"https://www.reddit.com/r/rarepuppers/comments/r5wab9/benjamin_would_appreciate_it_if_you_could_all/"},{"id":"mnd6bkqocoo51","type":"dog","title":"Samwise turns three today","sub":"rarepuppers","score":61441,"post":"https://www.reddit.com/r/rarepuppers/comments/ixkopr/samwise_turns_three_today/"},{"id":"g9grpztl4l391","type":"dog","title":"i think i nailed the tattoo","sub":"rarepuppers","score":60793,"post":"https://www.reddit.com/r/rarepuppers/comments/v4mg4c/i_think_i_nailed_the_tattoo/"},{"id":"va2frdbfcc051","type":"dog","title":"The goodest buoy","sub":"rarepuppers","score":60407,"post":"https://www.reddit.com/r/rarepuppers/comments/gom8oi/the_goodest_buoy/"},{"id":"414bl5jzynb31","type":"dog","title":"Waking a deaf wuppy","sub":"rarepuppers","score":58690,"post":"https://www.reddit.com/r/rarepuppers/comments/cfzcoz/waking_a_deaf_wuppy/"},{"id":"20xkwh90z0c31","type":"dog","title":"Momma was exhausted from taking care of the pups so dad went to get her a snack.","sub":"rarepuppers","score":58484,"post":"https://www.reddit.com/r/rarepuppers/comments/cgqju5/momma_was_exhausted_from_taking_care_of_the_pups/"},{"id":"xl6m4mfk9znh1","type":"dog","title":"Haggis is 16 weeks old today 🥹","sub":"puppies","score":4045,"post":"https://www.reddit.com/r/puppies/comments/1w9akes/haggis_is_16_weeks_old_today/"},{"id":"fdrf48gq6j0c1","type":"dog","title":"5-month-old Husky dog refuses to walk","sub":"puppies","score":3880,"post":"https://www.reddit.com/r/puppies/comments/17vw900/5monthold_husky_dog_refuses_to_walk/"},{"id":"yw04i95qmujd1","type":"dog","title":"9 week old beagle","sub":"puppies","score":2723,"post":"https://www.reddit.com/r/puppies/comments/1ex0o15/9_week_old_beagle/"},{"id":"pi9d0gzi783f1","type":"dog","title":"It felt like I was a Disney Princess when they all fell asleep on me.❤️ They are about two months old!","sub":"puppies","score":2679,"post":"https://www.reddit.com/r/puppies/comments/1kwazgc/it_felt_like_i_was_a_disney_princess_when_they/"},{"id":"gn344kwvz6tb1","type":"dog","title":"little cute puppy what should the cute name be","sub":"puppies","score":2641,"post":"https://www.reddit.com/r/puppies/comments/173u85l/little_cute_puppy_what_should_the_cute_name_be/"},{"id":"5fwrgsi1ticd1","type":"dog","title":"why is my puppy sliding around on his side 😭. someone explain Age: 1","sub":"puppies","score":2477,"post":"https://www.reddit.com/r/puppies/comments/1e384aw/why_is_my_puppy_sliding_around_on_his_side/"},{"id":"zbxqxtfo9xzb1","type":"dog","title":"just wanted to share how huge my puppy is at 8-months old 😂","sub":"puppies","score":2444,"post":"https://www.reddit.com/r/puppies/comments/17tkntn/just_wanted_to_share_how_huge_my_puppy_is_at/"},{"id":"novlihgj2rmf1","type":"dog","title":"Stuck Puppy! :) Athena 9 weeks old German Shepherd.","sub":"puppies","score":2311,"post":"https://www.reddit.com/r/puppies/comments/1n6iw1w/stuck_puppy_athena_9_weeks_old_german_shepherd/"},{"id":"5jgd67pkrkgg1","type":"dog","title":"Hugo. 3 months old","sub":"puppies","score":2308,"post":"https://www.reddit.com/r/puppies/comments/1qrmemr/hugo_3_months_old/"},{"id":"ja18l19v2g491","type":"cat","title":"Man stops to rescue kitten, gets ambushed by platoon","sub":"aww","score":334305,"post":"https://www.reddit.com/r/aww/comments/v7x39u/man_stops_to_rescue_kitten_gets_ambushed_by/"},{"id":"ye63fo37s7m41","type":"cat","title":"My rescue cat allows me to help him groom","sub":"aww","score":172469,"post":"https://www.reddit.com/r/aww/comments/fhdwou/my_rescue_cat_allows_me_to_help_him_groom/"},{"id":"4y80r6bdbf131","type":"cat","title":"Every year a bobcat mama gives birth to a litter of kittens on my roof. I set up a camera this time around.","sub":"aww","score":165171,"post":"https://www.reddit.com/r/aww/comments/buzdy7/every_year_a_bobcat_mama_gives_birth_to_a_litter/"},{"id":"9gdrgdfjg6v41","type":"cat","title":"I take my cat on adventures but he just sleeps right through them","sub":"aww","score":157036,"post":"https://www.reddit.com/r/aww/comments/g8fxi5/i_take_my_cat_on_adventures_but_he_just_sleeps/"},{"id":"xoe3m6nzmgt91","type":"cat","title":"My Gramps turned 94 today. His only request was to come over and give my cat “rides.”","sub":"aww","score":155661,"post":"https://www.reddit.com/r/aww/comments/y2j5rb/my_gramps_turned_94_today_his_only_request_was_to/"},{"id":"olp2gzd59ot81","type":"cat","title":"Angy kitten after failed attempt to steal the food","sub":"IllegallySmolCats","score":61850,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/u458tv/angy_kitten_after_failed_attempt_to_steal_the_food/"},{"id":"ka4wgkbw6f581","type":"cat","title":"Not OP but felt like you guys needed to see little ‘Shrimp’ 🥺","sub":"IllegallySmolCats","score":55155,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/rfwzrc/not_op_but_felt_like_you_guys_needed_to_see/"},{"id":"57ay1zg663981","type":"cat","title":"I was told this might belong here.","sub":"IllegallySmolCats","score":51669,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/rtkf9o/i_was_told_this_might_belong_here/"},{"id":"e2cunhgq3l181","type":"cat","title":"He made you Thanksgiving dinner, but you never showed up :(","sub":"IllegallySmolCats","score":38740,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/r1bd26/he_made_you_thanksgiving_dinner_but_you_never/"},{"id":"yg90ba174hu71","type":"cat","title":"Little miss Granny 🥺❤️ found her drinking dumpster juice","sub":"IllegallySmolCats","score":38081,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/qbl7sz/little_miss_granny_found_her_drinking_dumpster/"},{"id":"zl05g2orkg7f1","type":"cat","title":"0 thoughts in that smol head","sub":"IllegallySmolCats","score":34810,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/1ldixjv/0_thoughts_in_that_smol_head/"},{"id":"11j1ntz9n8981","type":"cat","title":"Omggg!","sub":"IllegallySmolCats","score":30733,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/ru5obl/omggg/"},{"id":"inqfzvi4d1b81","type":"cat","title":"Potato requires belly scratches","sub":"IllegallySmolCats","score":30702,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/s19x36/potato_requires_belly_scratches/"},{"id":"2mhe2aiy8q181","type":"cat","title":"My new assistant isn't pulling his weight, have to write emails all by myself","sub":"IllegallySmolCats","score":30433,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/r1umav/my_new_assistant_isnt_pulling_his_weight_have_to/"},{"id":"x248qmvmn3yh1","type":"cat","title":"I have… toes?!","sub":"IllegallySmolCats","score":29253,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/1xh97x0/i_have_toes/"},{"id":"xx6aut0tf2y81","type":"cat","title":"Spot’s way of saying “please rescue me off the side of a busy road”","sub":"IllegallySmolCats","score":29053,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/ukeq65/spots_way_of_saying_please_rescue_me_off_the_side/"},{"id":"etfnz6ivrb481","type":"cat","title":"Smol and yelly.","sub":"IllegallySmolCats","score":28647,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/rbrzl4/smol_and_yelly/"},{"id":"j0zfsoi56bwa1","type":"cat","title":"And so begins a life of crime.","sub":"IllegallySmolCats","score":27990,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/1302cy0/and_so_begins_a_life_of_crime/"},{"id":"ewp9ogwbzub81","type":"cat","title":"Here's something wholesome for you guys.","sub":"IllegallySmolCats","score":27476,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/s4l0ob/heres_something_wholesome_for_you_guys/"},{"id":"9i3fmemz3w581","type":"cat","title":"I just woke up, 3 in the morning, with these tiny meows outside my house, when I came outside I found this little guy alone","sub":"IllegallySmolCats","score":25678,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/rhovy0/i_just_woke_up_3_in_the_morning_with_these_tiny/"},{"id":"cclm9394ghn71","type":"cat","title":"I'm getting him in 8 weeks!! 😍🥰😍🥰","sub":"IllegallySmolCats","score":25617,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/po4epv/im_getting_him_in_8_weeks/"},{"id":"31e01g5pezv71","type":"cat","title":"Angry burrito does not approve of baths","sub":"IllegallySmolCats","score":25591,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/qgux7d/angry_burrito_does_not_approve_of_baths/"},{"id":"5rehn9mt4w1b1","type":"cat","title":"I have to cradle him like this or I can’t get any work done","sub":"IllegallySmolCats","score":25197,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/13qyqjp/i_have_to_cradle_him_like_this_or_i_cant_get_any/"},{"id":"baf2h6hmfjq71","type":"cat","title":"Smol Penny the last time I smuggled her into work.","sub":"IllegallySmolCats","score":25052,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/py8s6t/smol_penny_the_last_time_i_smuggled_her_into_work/"},{"id":"5ze38n63rmhe1","type":"cat","title":"This is Meep, she has been apprehended","sub":"IllegallySmolCats","score":24901,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/1ijks49/this_is_meep_she_has_been_apprehended/"},{"id":"dz79gu9suo5g1","type":"cat","title":"Goobert is exhausted from a long day of criming.","sub":"IllegallySmolCats","score":24846,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/1pg6cfh/goobert_is_exhausted_from_a_long_day_of_criming/"},{"id":"uch1cc7ernu81","type":"cat","title":"This swimming kitten","sub":"IllegallySmolCats","score":24625,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/u7t2j4/this_swimming_kitten/"},{"id":"8shyd21npkx81","type":"cat","title":"I started a new job last week…my boss sent me this video labeled as “important.”","sub":"IllegallySmolCats","score":24419,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/uint8e/i_started_a_new_job_last_weekmy_boss_sent_me_this/"},{"id":"vmczjdadg4k91","type":"cat","title":"How old is Baby Bean?! The lady we got her from said 3-4 MONTHS…","sub":"IllegallySmolCats","score":24036,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/wyk33g/how_old_is_baby_bean_the_lady_we_got_her_from/"},{"id":"8gjdf0vzyaqe1","type":"cat","title":"Smol and full of soup","sub":"IllegallySmolCats","score":23865,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/1jhi8vw/smol_and_full_of_soup/"},{"id":"2zu4l78qqpe91","type":"cat","title":"Angy little rescue getting a bath","sub":"IllegallySmolCats","score":23365,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/wbye58/angy_little_rescue_getting_a_bath/"},{"id":"7nd3qpfuz2i91","type":"cat","title":"Y'all, how am I supposed to deal with this","sub":"IllegallySmolCats","score":23344,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/wpv03d/yall_how_am_i_supposed_to_deal_with_this/"},{"id":"jlitypf77huh1","type":"cat","title":"Buckle up buckaroo","sub":"IllegallySmolCats","score":23321,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/1x1rb7t/buckle_up_buckaroo/"},{"id":"oamh2xgpq6i71","type":"cat","title":"Our newly adopted illegal criminal attacking the resident chonk.","sub":"IllegallySmolCats","score":22496,"post":"https://www.reddit.com/r/IllegallySmolCats/comments/p70shw/our_newly_adopted_illegal_criminal_attacking_the/"},{"id":"ymulmyhfw5eb1","type":"cat","title":"My cat stopped my landlord from entering without notice while I was at work","sub":"Catswhoyell","score":75642,"post":"https://www.reddit.com/r/Catswhoyell/comments/159i70h/my_cat_stopped_my_landlord_from_entering_without/"},{"id":"feapcpkwgxm71","type":"cat","title":"Ganon was not havin it on the way to the vet this morning","sub":"Catswhoyell","score":61880,"post":"https://www.reddit.com/r/Catswhoyell/comments/pme1k4/ganon_was_not_havin_it_on_the_way_to_the_vet_this/"},{"id":"aqfyvrn281ce1","type":"cat","title":"My deaf cat who has never seen the snow before was a bit.. frazzled for her first experience 🤣","sub":"Catswhoyell","score":51988,"post":"https://www.reddit.com/r/Catswhoyell/comments/1hxn2tq/my_deaf_cat_who_has_never_seen_the_snow_before/"},{"id":"jbwq9vxkdr941","type":"cat","title":"My cat meowed 137 times on the way to the vet the other day, this is most of them... apologies the camera is on me and not him, I didn't want him to wait for me to re-position it.","sub":"Catswhoyell","score":51805,"post":"https://www.reddit.com/r/Catswhoyell/comments/em9yc5/my_cat_meowed_137_times_on_the_way_to_the_vet_the/"},{"id":"nvvh2f9r11161","type":"cat","title":"My boyfriend got a cat stroller as a joke, thinking we'd never use it. Turns out she absolutely loves it and constantly begs to go out for more.","sub":"Catswhoyell","score":48008,"post":"https://www.reddit.com/r/Catswhoyell/comments/jzmhxz/my_boyfriend_got_a_cat_stroller_as_a_joke/"},{"id":"6jad4bsw36461","type":"cat","title":"POV: you’re a leg walking through my apartment","sub":"Catswhoyell","score":44072,"post":"https://www.reddit.com/r/Catswhoyell/comments/k9sb45/pov_youre_a_leg_walking_through_my_apartment/"},{"id":"ilblnrrvmli71","type":"cat","title":"Bertram, now 24!, needs your immediate attention.","sub":"Catswhoyell","score":42402,"post":"https://www.reddit.com/r/Catswhoyell/comments/p8go6g/bertram_now_24_needs_your_immediate_attention/"},{"id":"2622prl2iyw81","type":"cat","title":"When you say your cat’s favorite word","sub":"Catswhoyell","score":35516,"post":"https://www.reddit.com/r/Catswhoyell/comments/ugda1f/when_you_say_your_cats_favorite_word/"},{"id":"8i0e49sa72m71","type":"cat","title":"Grandma Sushi likes to shout “owa owa” whilst he eats","sub":"Catswhoyell","score":34409,"post":"https://www.reddit.com/r/Catswhoyell/comments/pjkhut/grandma_sushi_likes_to_shout_owa_owa_whilst_he/"},{"id":"qztoqfoozfr71","type":"cat","title":"My little yellybean protesting her imprisonment.","sub":"Catswhoyell","score":33208,"post":"https://www.reddit.com/r/Catswhoyell/comments/q16c41/my_little_yellybean_protesting_her_imprisonment/"},{"id":"as4ptqa19ug61","type":"cat","title":"Every morning when she hears the baby awake she makes sure she lets me know it’s time to get him.","sub":"Catswhoyell","score":32056,"post":"https://www.reddit.com/r/Catswhoyell/comments/lhjawm/every_morning_when_she_hears_the_baby_awake_she/"},{"id":"4vpv9bigojn81","type":"cat","title":"Kitty meows for his favorite cartoons","sub":"Catswhoyell","score":31586,"post":"https://www.reddit.com/r/Catswhoyell/comments/teocrt/kitty_meows_for_his_favorite_cartoons/"},{"id":"vlhwo56wc1n41","type":"cat","title":"Cat is mad about the quarantine","sub":"Catswhoyell","score":30969,"post":"https://www.reddit.com/r/Catswhoyell/comments/fjkvfx/cat_is_mad_about_the_quarantine/"},{"id":"h8fd19tb0rx91","type":"cat","title":"1st night fostering this 5wk old and she woke us up at 3am with her yelling","sub":"Catswhoyell","score":30694,"post":"https://www.reddit.com/r/Catswhoyell/comments/yl4p1h/1st_night_fostering_this_5wk_old_and_she_woke_us/"},{"id":"nwmjc6jokq181","type":"cat","title":"The video I received when I asked my roommate if my cat was still alive while I was out of town","sub":"Catswhoyell","score":28089,"post":"https://www.reddit.com/r/Catswhoyell/comments/r1vnk7/the_video_i_received_when_i_asked_my_roommate_if/"},{"id":"rkw3k0ij80m81","type":"cat","title":"My cat yells to alert everyone when she thinks she's caught a mouse","sub":"Catswhoyell","score":27986,"post":"https://www.reddit.com/r/Catswhoyell/comments/t8vupw/my_cat_yells_to_alert_everyone_when_she_thinks/"},{"id":"pbnjot26dg361","type":"cat","title":"Robbie, who is deaf, produces some of the strangest yells ever","sub":"Catswhoyell","score":27554,"post":"https://www.reddit.com/r/Catswhoyell/comments/k7i7ec/robbie_who_is_deaf_produces_some_of_the_strangest/"},{"id":"owoiteb9yqm51","type":"cat","title":"“Why am I spinning?!”","sub":"Catswhoyell","score":27091,"post":"https://www.reddit.com/r/Catswhoyell/comments/irg3w4/why_am_i_spinning/"},{"id":"v2m7g608ttw41","type":"cat","title":"21 year old Pepsi is deaf and looking for owner - Finds with joy","sub":"Catswhoyell","score":26942,"post":"https://www.reddit.com/r/Catswhoyell/comments/gdlv3x/21_year_old_pepsi_is_deaf_and_looking_for_owner/"},{"id":"enqt3s02dkc71","type":"cat","title":"I rescued a kitten off the road a few months ago and she would not stop meowing the whole time I had her!","sub":"Catswhoyell","score":26804,"post":"https://www.reddit.com/r/Catswhoyell/comments/oopcm4/i_rescued_a_kitten_off_the_road_a_few_months_ago/"},{"id":"429xqjjj89ag1","type":"cat","title":"Darrell, my housemate's cat, on Day 1 of his owner being away for a 2-week Christmas break","sub":"Catswhoyell","score":26769,"post":"https://www.reddit.com/r/Catswhoyell/comments/1pz6a2z/darrell_my_housemates_cat_on_day_1_of_his_owner/"},{"id":"ey9bmssef9s41","type":"cat","title":"An earnest warning","sub":"Catswhoyell","score":26185,"post":"https://www.reddit.com/r/Catswhoyell/comments/fzjxls/an_earnest_warning/"},{"id":"xwfmv7rrwe061","type":"cat","title":"Mighty huntress announcing her prey has been captured","sub":"Catswhoyell","score":25979,"post":"https://www.reddit.com/r/Catswhoyell/comments/jxqxge/mighty_huntress_announcing_her_prey_has_been/"},{"id":"57558dn7egh61","type":"cat","title":"Nighttime playtime... she loves this, I swear.","sub":"Catswhoyell","score":25777,"post":"https://www.reddit.com/r/Catswhoyell/comments/ljpdr5/nighttime_playtime_she_loves_this_i_swear/"},{"id":"q5f480nu9mu51","type":"cat","title":"Humperdink wants pets. Solo kitten who’s adoptable from my local shelter in MN.","sub":"Catswhoyell","score":25284,"post":"https://www.reddit.com/r/Catswhoyell/comments/jfwl9z/humperdink_wants_pets_solo_kitten_whos_adoptable/"},{"id":"2u9fwnj227v71","type":"cat","title":"We just found this bean stuck in the engine bay.","sub":"Catswhoyell","score":24551,"post":"https://www.reddit.com/r/Catswhoyell/comments/qe42bi/we_just_found_this_bean_stuck_in_the_engine_bay/"},{"id":"ea5mz7dabz051","type":"cat","title":"My little old man loved this game. I miss him every day","sub":"Catswhoyell","score":24275,"post":"https://www.reddit.com/r/Catswhoyell/comments/gqjqq9/my_little_old_man_loved_this_game_i_miss_him/"},{"id":"ek7ryec3g9g61","type":"cat","title":"Not sure if if this counts...","sub":"Catswhoyell","score":24237,"post":"https://www.reddit.com/r/Catswhoyell/comments/lfcfph/not_sure_if_if_this_counts/"},{"id":"7j8clqlsv1z51","type":"cat","title":"He doesn't understand that I'm not actually talking to him during my Teams calls","sub":"Catswhoyell","score":23577,"post":"https://www.reddit.com/r/Catswhoyell/comments/jtl7g6/he_doesnt_understand_that_im_not_actually_talking/"},{"id":"223qtvysxqi71","type":"cat","title":"This is how Jazzy greets me every morning. Every. Morning. (Sound up!)","sub":"Catswhoyell","score":23446,"post":"https://www.reddit.com/r/Catswhoyell/comments/p8vmfg/this_is_how_jazzy_greets_me_every_morning_every/"},{"id":"uuw01vf336d61","type":"cat","title":"I recently adopted Winston from the street; every day he thanks us with his love.","sub":"Catswhoyell","score":23276,"post":"https://www.reddit.com/r/Catswhoyell/comments/l3nfbh/i_recently_adopted_winston_from_the_street_every/"},{"id":"cqgkx84a4p391","type":"cat","title":"Meet Coco. Neighbour’s cat that escaped her crate and home after a vet visit.","sub":"Catswhoyell","score":23054,"post":"https://www.reddit.com/r/Catswhoyell/comments/v51p58/meet_coco_neighbours_cat_that_escaped_her_crate/"},{"id":"me8auraltcc71","type":"cat","title":"I always visit this noisy guy when I go on walks","sub":"Catswhoyell","score":22903,"post":"https://www.reddit.com/r/Catswhoyell/comments/oo0bx9/i_always_visit_this_noisy_guy_when_i_go_on_walks/"},{"id":"ydh6oxrk1ru61","type":"cat","title":"Hungry Hungry Kittens (cred. kathy.newville on TikTok)","sub":"Catswhoyell","score":22643,"post":"https://www.reddit.com/r/Catswhoyell/comments/mw8bdi/hungry_hungry_kittens_cred_kathynewville_on_tiktok/"},{"id":"jg4qkn8o2aka1","type":"cat","title":"Pick me up so I can bite you!","sub":"Catswhoyell","score":21778,"post":"https://www.reddit.com/r/Catswhoyell/comments/11bdz9y/pick_me_up_so_i_can_bite_you/"}];
+VIDEOS.forEach(v => v.hls = `https://v.redd.it/${v.id}/HLSPlaylist.m3u8`);
+const BY_ID = Object.fromEntries(VIDEOS.map(v => [v.id, v]));
+// Personal welcome card, always shown first when the page opens (not a video, never a favourite)
+const INTRO_ID = "__intro";
+BY_ID[INTRO_ID] = { id: INTRO_ID, type: "intro", img: "intro.jpg" };
+
+// ---- state ----
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let lang = store.get("nyx-lang", "en") === "ro" ? "ro" : "en";
+let favs = store.get("nyx-favs-reddit", []).filter(id => BY_ID[id]);
+let filter = "all";
+let muted = true;
+let queue = [];
+let history = [];
+const t = k => T[lang][k];
+
+const deck = document.getElementById("deck");
+const favCount = document.getElementById("favCount");
+const undoBtn = document.getElementById("undoBtn");
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function buildQueue(withIntro) {
+  history = [];
+  queue = shuffle(VIDEOS.filter(v => filter === "all" || v.type === filter).map(v => v.id));
+  if (withIntro === true) queue.unshift(INTRO_ID);
+  render();
+}
+
+// ---- language ----
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll("[data-i18n-aria]").forEach(el => el.setAttribute("aria-label", t(el.dataset.i18nAria)));
+  document.querySelectorAll(".lang button").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === lang));
+}
+function setLang(l) {
+  lang = l;
+  store.set("nyx-lang", l);
+  applyLang();
+  relabelCards();
+  if (!sheet.hidden) openSheet();
+}
+// update text on cards in place so the playing video keeps going
+function relabelCards() {
+  deck.querySelectorAll(".card").forEach(card => {
+    const v = BY_ID[card.dataset.id];
+    card.querySelector(".tag").textContent = t(v.type);
+    card.querySelector(".stamp.love").textContent = t("stampLove");
+    card.querySelector(".stamp.nope").textContent = t("stampNope");
+    if (v.type === "intro") {
+      card.querySelector(".intro-text").textContent = t("introText");
+      card.querySelector(".intro-go").textContent = t("introGo");
+      return;
+    }
+    card.querySelector(".rlink").textContent = t("onReddit");
+    card.querySelector(".loading").textContent = t("loading");
+    const s = card.querySelector(".sound");
+    if (s) s.setAttribute("aria-label", muted ? t("soundOn") : t("soundOff"));
+  });
+  const empty = deck.querySelector(".empty");
+  if (empty) render();
+}
+
+// ---- rendering ----
+const ICON_MUTED = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/><path d="m22 9-6 6M16 9l6 6"/></svg>';
+const ICON_SOUND = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+const ICON_PLAY = '<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+
+// Reddit serves HLS streams (video + sound). Safari plays them natively, other browsers through hls.js.
+const players = new Set();
+function attachStream(video, v) {
+  if (video.dataset.attached) return;
+  video.dataset.attached = "1";
+  if (window.Hls && Hls.isSupported()) {
+    const hls = new Hls({ maxBufferLength: 12, startLevel: -1 });
+    hls.loadSource(v.hls);
+    hls.attachMedia(video);
+    video._hls = hls;
+    players.add(hls);
+  } else {
+    video.src = v.hls;
+  }
+}
+function detachAll(root) {
+  root.querySelectorAll("video").forEach(vid => {
+    if (vid._hls) { vid._hls.destroy(); players.delete(vid._hls); vid._hls = null; }
+  });
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtScore = n => n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1).replace(/\.0$/, "") + "k" : String(n);
+
+function makeCard(v, depth) {
+  const card = document.createElement("article");
+  card.className = "card";
+  card.dataset.id = v.id;
+  if (v.type === "intro") {
+    card.classList.add("intro");
+    card.innerHTML = `
+      <img src="${v.img}" alt="" draggable="false">
+      <video hidden muted></video>
+      <div class="shade"></div>
+      <div class="stamp love">${t("stampLove")}</div>
+      <div class="stamp nope">${t("stampNope")}</div>
+      <div class="paused-hint" hidden></div>
+      <div class="info">
+        <span class="tag intro">${t("intro")}</span>
+        <h2>Hey Ms<b>Nyx</b></h2>
+        <p class="intro-text">${t("introText")}</p>
+        <span class="intro-go">${t("introGo")}</span>
+      </div>`;
+    return card;
+  }
+  card.innerHTML = `
+    <video playsinline loop muted></video>
+    <div class="loading">${t("loading")}</div>
+    <div class="shade"></div>
+    <div class="stamp love">${t("stampLove")}</div>
+    <div class="stamp nope">${t("stampNope")}</div>
+    <div class="paused-hint" hidden>${ICON_PLAY}</div>
+    <div class="info">
+      <span class="tag ${v.type}">${t(v.type)}</span>
+      <h2>${esc(v.title)}</h2>
+      <span class="meta credit"><span class="score">▲ ${fmtScore(v.score)}</span> r/${v.sub} · <a class="rlink" href="${v.post}" target="_blank" rel="noopener">${t("onReddit")}</a></span>
+    </div>`;
+  const vid = card.querySelector("video");
+  // stream the top card and the next one; the third waits
+  if (depth <= 1) attachStream(vid, v);
+  const loading = card.querySelector(".loading");
+  vid.addEventListener("playing", () => loading.hidden = true);
+  vid.addEventListener("loadeddata", () => loading.hidden = true);
+  return card;
+}
+
+function render() {
+  detachAll(deck);
+  deck.innerHTML = "";
+  undoBtn.disabled = history.length === 0;
+  if (queue.length === 0) {
+    deck.innerHTML = `<div class="empty">
+      <p class="big">${t("doneTitle")}</p>
+      <p>${t("doneText")(favs.length)}</p>
+      <button class="primary" id="restart">${t("restart")}</button>
+    </div>`;
+    document.getElementById("restart").onclick = buildQueue;
+    toggleButtons(false);
+    return;
+  }
+  toggleButtons(true);
+  const visible = queue.slice(0, 3);
+  for (let i = visible.length - 1; i >= 0; i--) {
+    const card = makeCard(BY_ID[visible[i]], i);
+    setRest(card, i);
+    deck.appendChild(card);
+  }
+  activateTop();
+}
+
+function setRest(card, depth) {
+  card.style.transform = `translateY(${depth * 12}px) scale(${1 - depth * 0.045})`;
+  card.style.zIndex = 10 - depth;
+}
+function topCard() { return deck.querySelector(".card:last-of-type"); }
+
+function activateTop() {
+  const card = topCard();
+  if (!card) return;
+  const vid = card.querySelector("video");
+  if (card.dataset.id === INTRO_ID) { bindDrag(card); return; }
+  attachStream(vid, BY_ID[card.dataset.id]);
+  vid.muted = muted;
+  const btn = document.createElement("button");
+  btn.className = "sound";
+  btn.setAttribute("aria-label", muted ? t("soundOn") : t("soundOff"));
+  btn.innerHTML = muted ? ICON_MUTED : ICON_SOUND;
+  btn.addEventListener("pointerdown", e => e.stopPropagation());
+  btn.addEventListener("click", e => { e.stopPropagation(); toggleMute(); });
+  card.appendChild(btn);
+  vid.play().catch(() => {});
+  bindDrag(card);
+}
+
+function toggleMute() {
+  muted = !muted;
+  const card = topCard();
+  if (!card || card.dataset.id === INTRO_ID) return;
+  card.querySelector("video").muted = muted;
+  const btn = card.querySelector(".sound");
+  btn.innerHTML = muted ? ICON_MUTED : ICON_SOUND;
+  btn.setAttribute("aria-label", muted ? t("soundOn") : t("soundOff"));
+}
+
+function toggleButtons(on) {
+  document.getElementById("nopeBtn").disabled = !on;
+  document.getElementById("loveBtn").disabled = !on;
+}
+
+// ---- dragging ----
+function bindDrag(card) {
+  let startX = 0, startY = 0, dx = 0, dy = 0, startT = 0, active = false;
+  const love = card.querySelector(".stamp.love");
+  const nope = card.querySelector(".stamp.nope");
+
+  card.addEventListener("pointerdown", e => {
+    if (e.target.closest("a")) return;
+    active = true; dx = dy = 0;
+    startX = e.clientX; startY = e.clientY; startT = performance.now();
+    card.setPointerCapture(e.pointerId);
+    card.classList.add("dragging");
+  });
+  card.addEventListener("pointermove", e => {
+    if (!active) return;
+    dx = e.clientX - startX; dy = e.clientY - startY;
+    card.style.transform = `translate(${dx}px, ${dy * 0.4}px) rotate(${dx / 18}deg)`;
+    love.style.opacity = Math.max(0, Math.min(1, dx / 90));
+    nope.style.opacity = Math.max(0, Math.min(1, -dx / 90));
+  });
+  const end = () => {
+    if (!active) return;
+    active = false;
+    card.classList.remove("dragging");
+    const dist = Math.hypot(dx, dy);
+    const speed = Math.abs(dx) / Math.max(1, performance.now() - startT);
+    if (dist < 6) { togglePause(card); setRest(card, 0); return; }
+    if (Math.abs(dx) > 110 || (speed > 0.6 && Math.abs(dx) > 40)) {
+      decide(dx > 0, dy * 0.4);
+    } else {
+      setRest(card, 0);
+      love.style.opacity = nope.style.opacity = 0;
+    }
+  };
+  card.addEventListener("pointerup", end);
+  card.addEventListener("pointercancel", end);
+}
+
+function togglePause(card) {
+  if (card.dataset.id === INTRO_ID) return;
+  const vid = card.querySelector("video");
+  const hint = card.querySelector(".paused-hint");
+  if (vid.paused) { vid.play().catch(() => {}); hint.hidden = true; }
+  else { vid.pause(); hint.hidden = false; }
+}
+
+let busy = false;
+function decide(liked, dy = 0) {
+  const card = topCard();
+  if (!card || busy) return;
+  busy = true;
+  const id = card.dataset.id;
+  card.querySelector(liked ? ".stamp.love" : ".stamp.nope").style.opacity = 1;
+  card.classList.remove("dragging");
+  card.classList.add("leaving");
+  const w = window.innerWidth;
+  card.style.transform = `translate(${liked ? w : -w}px, ${dy - 40}px) rotate(${liked ? 30 : -30}deg)`;
+  card.style.opacity = 0;
+  card.querySelector("video").pause();
+
+  if (liked && id !== INTRO_ID && !favs.includes(id)) {
+    favs.unshift(id);
+    store.set("nyx-favs-reddit", favs);
+    updateFavCount(true);
+  }
+  history.push({ id, liked });
+  queue.shift();
+
+  const rest = [...deck.querySelectorAll(".card")].filter(c => c !== card).reverse();
+  rest.forEach((c, i) => setRest(c, i));
+
+  setTimeout(() => { busy = false; render(); }, 320);
+}
+
+function undo() {
+  const last = history.pop();
+  if (!last || busy) return;
+  if (last.liked) {
+    favs = favs.filter(f => f !== last.id);
+    store.set("nyx-favs-reddit", favs);
+    updateFavCount();
+  }
+  queue.unshift(last.id);
+  render();
+}
+
+function updateFavCount(bump) {
+  favCount.textContent = favs.length;
+  const b = document.getElementById("favBtn");
+  if (bump) { b.classList.remove("bump"); void b.offsetWidth; b.classList.add("bump"); }
+}
+
+// ---- favourites sheet ----
+const sheet = document.getElementById("sheet");
+const sheetBg = document.getElementById("sheetBg");
+const favGrid = document.getElementById("favGrid");
+
+function openSheet() {
+  const top = topCard();
+  if (top) top.querySelector("video").pause();
+  detachAll(favGrid);
+  favGrid.innerHTML = favs.length ? "" : `<p class="none">${t("none")}</p>`;
+  favs.forEach(id => {
+    const v = BY_ID[id];
+    const el = document.createElement("div");
+    el.className = "fav";
+    el.innerHTML = `
+      <video playsinline loop muted></video>
+      <span>${esc(v.title)}</span>
+      <button class="rm" aria-label="${t("remove")}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>`;
+    const vid = el.querySelector("video");
+    el.addEventListener("click", () => {
+      favGrid.querySelectorAll("video").forEach(o => { if (o !== vid) o.pause(); });
+      attachStream(vid, v);
+      vid.paused ? vid.play().catch(() => {}) : vid.pause();
+    });
+    el.querySelector(".rm").addEventListener("click", e => {
+      e.stopPropagation();
+      favs = favs.filter(f => f !== id);
+      store.set("nyx-favs-reddit", favs);
+      updateFavCount();
+      openSheet();
+    });
+    favGrid.appendChild(el);
+  });
+  sheet.hidden = sheetBg.hidden = false;
+}
+function closeSheet() {
+  detachAll(favGrid);
+  sheet.hidden = sheetBg.hidden = true;
+  const top = topCard();
+  if (top && top.querySelector(".paused-hint").hidden) top.querySelector("video").play().catch(() => {});
+}
+
+// ---- wiring ----
+document.getElementById("nopeBtn").onclick = () => decide(false);
+document.getElementById("loveBtn").onclick = () => decide(true);
+undoBtn.onclick = undo;
+document.getElementById("favBtn").onclick = openSheet;
+document.getElementById("closeSheet").onclick = closeSheet;
+sheetBg.onclick = closeSheet;
+document.querySelectorAll(".lang button").forEach(b => b.onclick = () => setLang(b.dataset.lang));
+document.querySelectorAll(".chip").forEach(c => c.onclick = () => {
+  filter = c.dataset.filter;
+  document.querySelectorAll(".chip").forEach(o => o.setAttribute("aria-pressed", o === c));
+  buildQueue();
+});
+document.addEventListener("keydown", e => {
+  if (!sheet.hidden) { if (e.key === "Escape") closeSheet(); return; }
+  if (e.key === "ArrowRight") decide(true);
+  else if (e.key === "ArrowLeft") decide(false);
+  else if (e.key === "Backspace" || e.key.toLowerCase() === "z") undo();
+  else if (e.key.toLowerCase() === "m") toggleMute();
+  else if (e.key === " ") { e.preventDefault(); const tc = topCard(); if (tc) togglePause(tc); }
+});
+
+applyLang();
+updateFavCount();
+buildQueue(true);
+</script>
+</body>
+</html>

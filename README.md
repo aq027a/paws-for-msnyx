@@ -1,6 +1,6 @@
 # Paws for MsNyx
 
-A Tinder-style swipe page with the cutest dog and cat videos on Reddit, made as a gift for MsNyx.
+A Tinder-style swipe page with the cutest dog, cat and bird videos on Reddit, made as a gift for MsNyx.
 
 Live: https://aq027a.github.io/paws-for-msnyx/
 
@@ -28,3 +28,4 @@ git push
 
 - `index.html` – the whole app (HTML, CSS, JS and the video list in one file)
 - `intro.jpg` – photo on the welcome card (metadata stripped)
+- `tools/fetch_videos.py` – experimental: collect top videos from the Arctic Shift archive (not used yet)
